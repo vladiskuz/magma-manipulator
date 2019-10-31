@@ -1,0 +1,17 @@
+k8s:
+    kubeconfig_path: /root/vkuzmin/kconfig
+    namespace: magma
+orc8r_api_url: https://172.16.98.74:9443
+magma_certs_path:
+    - /root/helm/magma/orc8r/charts/secrets/.secrets/certs/admin_operator.pem
+    - /root/helm/magma/orc8r/charts/secrets/.secrets/certs/admin_operator.key.pem
+gateways:
+    names:
+       - cwf01
+       - cwf02
+       - feg01
+       - feg02
+    username: testuser
+    password: testuser
+    network: testnet01
+    id_prefix: usa_ca_
