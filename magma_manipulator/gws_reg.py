@@ -63,7 +63,7 @@ def put_event_after_timeout(event):
         sec=event['timeout'], event=event['pod_name']))
     if event['timeout'] > EVENT_MAX_TIMEOUT:
         LOG.error('Can not handle event for pod {pod_name}. Timeout expired'
-                  .format(pod_name=pod_name))
+                  .format(pod_name=event['pod_name']))
         return
     t = threading.Timer(event['timeout'], lambda: events_queue.put(event))
     t.start()
