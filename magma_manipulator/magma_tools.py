@@ -27,14 +27,14 @@ LOG = logging.getLogger(__name__)
 def is_network_exist(orc8r_api_url, gw_net, certs):
     LOG.info('Check if network {gw_net} exists'.format(gw_net=gw_net))
     magma_net_url = urljoin(orc8r_api_url,
-                            'magma/networks/{gw_net}'.format(gw_net=gw_net))
+                            'magma/v1/networks/{gw_net}'.format(gw_net=gw_net))
     LOG.debug('Make get request to {url}'.format(url=magma_net_url))
     resp = requests.get(magma_net_url, verify=False, cert=certs)
     str_result = resp.content.decode('ascii')
     json_result = json.loads(str_result)
     LOG.debug('Received result {result}'.format(result=json_result))
-    if 'name' in json_result:
-        return json_result['name'] == gw_net
+    if 'id' in json_result:
+        return json_result['id'] == gw_net
     return False
 
 
@@ -42,14 +42,18 @@ def create_network(orc8r_api_url, gw_net, certs):
     LOG.info('Start to create network {gw_net}'.format(gw_net=gw_net))
     magma_net_url = urljoin(
         orc8r_api_url,
-        'magma/networks?requested_id={gw_net}'.format(gw_net=gw_net))
+        'magma/v1/networks')
     data = {
-        'features': {
-            'featureName': 'featureProp1',
-            'featureName2': 'featureProp2'
+        'description': 'This network created from automation tool',
+        'dns': {
+          'enable_caching': False,
+          'local_ttl': 0,
         },
+        'id': gw_net,
         'name': gw_net
-    }
+      }
+
+
     headers = {'content-type': 'application/json',
                'accept': 'application/json'}
     resp = requests.post(magma_net_url,
@@ -75,16 +79,32 @@ def register_gw(orc8r_api_url, gw_net, gw_id, gw_uuid, gw_key, gw_name, certs):
         gw_uuid=gw_uuid, gw_key=gw_key))
     magma_gw_url = urljoin(
         orc8r_api_url,
-        'magma/networks/{gw_net}/gateways?requested_id={gw_id}'.format(
+        'magma/v1/networks/{gw_net}/gateways'.format(
             gw_net=gw_net,
             gw_id=gw_id))
+
     data = {
-        'hardware_id': gw_uuid,
-        'key': {
+        'description': 'This gateway created from automation tool',
+        'device': {
+          'hardware_id': gw_uuid,
+          'key': {
             'key': gw_key,
             'key_type': 'SOFTWARE_ECDSA_SHA256'
+          }
         },
-    }
+        'id': gw_id,
+        'magmad': {
+          'autoupgrade_enabled': True,
+          'autoupgrade_poll_interval': 300,
+          'checkin_interval': 60,
+          'checkin_timeout': 10,
+          'dynamic_services': [],
+        },
+        'name': gw_id,
+        'tier': 'default',
+        'type': 'carrier_wifi_network'
+      }
+
     headers = {'content-type': 'application/json',
                'accept': 'application/json'}
     resp = requests.post(magma_gw_url,
@@ -107,7 +127,7 @@ def is_gateway_in_network(orc8r_api_url, gw_net, gw_id, certs):
         gw_id=gw_id, gw_net=gw_net))
     magma_gw_url = urljoin(
         orc8r_api_url,
-        'magma/networks/{gw_net}/gateways'.format(
+        'magma/v1/networks/{gw_net}/gateways'.format(
             gw_net=gw_net))
     headers = {'content-type': 'application/json',
                'accept': 'application/json'}
@@ -128,7 +148,7 @@ def delete_gateway(orc8r_api_url, gw_net, gw_id, certs):
 
     magma_gw_url = urljoin(
         orc8r_api_url,
-        'magma/networks/{gw_net}/gateways/{gw_id}'.format(
+        'magma/v1/networks/{gw_net}/gateways/{gw_id}'.format(
             gw_net=gw_net,
             gw_id=gw_id))
     headers = {'content-type': 'application/json',

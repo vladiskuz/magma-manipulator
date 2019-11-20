@@ -15,6 +15,7 @@
 #    under the License.
 
 import logging
+import sys
 import threading
 import time
 from queue import Queue
@@ -30,7 +31,7 @@ import utils
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
 
 K8S_STARTED_REASON = ('Started',)
@@ -38,7 +39,7 @@ K8S_ADDED_TYPE = ('ADDED',)
 
 events_queue = Queue()
 INIT_QUEUE_TIMEOUT = 10
-EVENT_MAX_TIMEOUT = 600
+EVENT_MAX_TIMEOUT = 900
 
 
 def watch_for_gateways(kubeconfig_path, kube_namespace, gw_names):
@@ -89,7 +90,7 @@ def parse_config(config):
     return cfg
 
 
-if __name__ == '__main__':
+def main():
     cfg = parse_config('config.yml')
     start_kubernetes_event_handler(cfg['k8s']['kubeconfig_path'],
                                    cfg['k8s']['namespace'],
@@ -146,3 +147,6 @@ if __name__ == '__main__':
             time.sleep(1)
         except Exception as e:
             LOG.error(e)
+
+if __name__ == '__main__':
+    sys.exit(main())
