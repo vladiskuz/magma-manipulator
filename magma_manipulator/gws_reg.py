@@ -23,7 +23,6 @@ import yaml
 
 from kubernetes import client, config, watch
 
-import exceptions
 import k8s_tools
 import magma_tools
 import utils
@@ -147,6 +146,7 @@ def main():
             time.sleep(1)
         except Exception as e:
             LOG.error(e)
+
 
 if __name__ == '__main__':
     sys.exit(main())

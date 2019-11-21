@@ -31,6 +31,7 @@ GET_GW_UUID_CMD = 'cd /var/opt/magma/docker ; '\
                   'sudo docker-compose exec '\
                   '-T magmad /usr/local/bin/show_gateway_info.py'
 
+
 def is_gw_reachable(gw_ip):
     response = os.system('ping -c 1 ' + gw_ip)
     return response == 0

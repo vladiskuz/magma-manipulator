@@ -12,6 +12,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+
 class CloudInitException(Exception):
     def __init__(self, message):
         super().__init__(message)

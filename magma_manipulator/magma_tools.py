@@ -53,7 +53,6 @@ def create_network(orc8r_api_url, gw_net, certs):
         'name': gw_net
       }
 
-
     headers = {'content-type': 'application/json',
                'accept': 'application/json'}
     resp = requests.post(magma_net_url,
