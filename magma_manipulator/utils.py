@@ -12,6 +12,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import json
 import logging
 import os
 
@@ -88,3 +89,17 @@ def get_gw_uuid_and_key(gw_ip, gw_username, gw_password):
     gw_uuid = ssh_output.split('\n')[2]
     gw_key = ssh_output.split('\n')[6]
     return (gw_uuid, gw_key)
+
+
+def save_gateway_config(gw_id, configs_dir, cfg):
+    cfg_name = str(gw_id) + '.json'
+    cfg_path = os.path.join(configs_dir, cfg_name)
+    with open(cfg_path, 'w', encoding='utf-8') as f:
+        json.dump(cfg, f, ensure_ascii=False, indent=4)
+    return cfg_path
+
+
+def load_gateway_config(gw_id, config_path):
+    with open(config_path, 'r', encoding='utf-8') as f:
+        json_data = json.load(f)
+    return json_data
