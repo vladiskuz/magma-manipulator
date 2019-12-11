@@ -6,8 +6,8 @@ This is a magma gateway registration tool. Often we are faced with a situation w
 git clone git@github.com:vladiskuz/magma-manipulator.git
 cd magma-manipulator
 virtualenv -p python3 .venv
-pip3 install -r requirements.txt
 source .venv/bin/activate
+pip3 install -r requirements.txt
 ```
 
 ## Configuration
