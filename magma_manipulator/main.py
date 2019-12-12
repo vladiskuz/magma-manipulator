@@ -99,6 +99,7 @@ def get_gws_info(orc8r_api_url, configs_dir, certs):
                     gw_id, configs_dir, gw_config)
             info = {
                 gw_desc['name']: {
+                    'id': gw_id,
                     'network': net,
                     'network_type': net_type,
                     'config_path': config_path
@@ -151,7 +152,8 @@ def main():
                     put_event_after_timeout(event)
                     continue
 
-                gw_id = gw_pod_name.split('-')[0]
+                gw_name = gw_pod_name.split('-')[0]
+                gw_id = gws_info[gw_name]['id']
                 gw_ip = k8s_tools.get_gw_ip(k8s_cfg,
                                             k8s_namespace,
                                             gw_pod_name)
@@ -160,6 +162,7 @@ def main():
                     event['timeout'] *= 2
                     put_event_after_timeout(event)
                     continue
+                time.sleep(10)
 
                 if not utils.is_cloud_init_done(gw_ip, gw_username,
                                                 gw_password):
@@ -172,22 +175,25 @@ def main():
                                                             gw_username,
                                                             gw_password)
 
-                gw_net = gws_info[gw_id]['network']
+                gw_net = gws_info[gw_name]['network']
+                gw_net_type = gws_info[gw_name]['network_type']
                 if magma_api.is_gateway_in_network(orc8r_api_url,
-                                                   gw_net, gw_id, certs):
+                                                   gw_net,
+                                                   gw_id, certs):
                     magma_api.delete_gateway(orc8r_api_url,
-                                             gw_net, gw_id, certs)
+                                             gw_net, gw_net_type,
+                                             gw_id, certs)
 
-                gw_net_type = gws_info[gw_id]['network_type']
-                magma_api.register_gw(orc8r_api_url,
-                                      gw_net, gw_net_type,
-                                      gw_id, gw_uuid, gw_key, gw_id, certs)
+                magma_api.register_gateway(orc8r_api_url,
+                                           gw_net, gw_net_type,
+                                           gw_id, gw_uuid, gw_key,
+                                           gw_name, certs)
 
-                config_path = gws_info[gw_id]['config_path']
-                gw_cfg = utils.load_gateway_config(gw_id, config_path)
-                magma_api.apply_gateway_config(orc8r_api_url,
-                                               gw_net, gw_net_type,
-                                               gw_id, gw_cfg, certs)
+#                config_path = gws_info[gw_name]['config_path']
+#                gw_cfg = utils.load_gateway_config(gw_name, config_path)
+#                magma_api.apply_gateway_config(orc8r_api_url,
+#                                               gw_net, gw_net_type,
+#                                               gw_name, gw_cfg, certs)
             time.sleep(1)
         except Exception as e:
             LOG.error(e)

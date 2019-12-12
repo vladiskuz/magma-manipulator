@@ -70,41 +70,229 @@ def create_network(orc8r_api_url, gw_net, certs):
         raise exceptions.MagmaRequestException(msg)
 
 
-def register_gw(orc8r_api_url, gw_net, gw_net_type,
-                gw_id, gw_uuid, gw_key, gw_name, certs):
-    LOG.info('Register gateway {gw_name} in network '
-             '{gw_net} with gateway id {gw_id}'.format(gw_name=gw_name,
-                                                       gw_net=gw_net,
-                                                       gw_id=gw_id))
-    LOG.debug('Register gateway UUID {gw_uuid}, Gateway key {gw_key}'.format(
-        gw_uuid=gw_uuid, gw_key=gw_key))
-    magma_gw_url = urljoin(
-        orc8r_api_url,
-        'magma/v1/networks/{gw_net}/gateways'.format(
-            gw_net=gw_net,
-            gw_id=gw_id))
+def _get_register_gateway_url(gw_net_type, gw_net):
+    if gw_net_type == 'carrier_wifi_network':
+        return 'magma/v1/cwf/{gw_net}/gateways'.format(gw_net=gw_net)
+    elif gw_net_type == 'feg':
+        return 'magma/v1/feg/{gw_net}/gateways'.format(gw_net=gw_net)
 
-    data = {
-        'description': 'This gateway created from automation tool',
-        'device': {
-          'hardware_id': gw_uuid,
-          'key': {
-            'key': gw_key,
-            'key_type': 'SOFTWARE_ECDSA_SHA256'
-          }
-        },
-        'id': gw_id,
-        'magmad': {
-          'autoupgrade_enabled': True,
-          'autoupgrade_poll_interval': 300,
-          'checkin_interval': 60,
-          'checkin_timeout': 10,
-          'dynamic_services': [],
-        },
-        'name': gw_id,
-        'tier': 'default',
-        'type': gw_net_type
-      }
+
+def _get_register_gateway_data(gw_net_type, gw_id, gw_uuid, gw_key, gw_name):
+    if gw_net_type == 'carrier_wifi_network':
+        data = {
+          "carrier_wifi": {
+            "allowed_gre_peers": [
+              {
+                "ip": "192.168.127.1",
+                "key": 1
+              }
+            ]
+          },
+          "description": "Gateway was created from magma-manipulator",
+          "device": {
+            "hardware_id": gw_uuid,
+            "key": {
+              "key": gw_key,
+              "key_type": "SOFTWARE_ECDSA_SHA256"
+            }
+          },
+          "id": gw_id,
+          "magmad": {
+            "autoupgrade_enabled": True,
+            "autoupgrade_poll_interval": 300,
+            "checkin_interval": 60,
+            "checkin_timeout": 10,
+            "dynamic_services": [],
+            "feature_flags": {
+              "newfeature1": True,
+              "newfeature2": False
+            }
+          },
+          "name": gw_name,
+          "tier": "default"
+        }
+        return data
+
+    elif gw_net_type == 'feg':
+        data = {
+            "description": "Sample Gateway description",
+            "device": {
+              "hardware_id": gw_uuid,
+              "key": {
+                "key": gw_key,
+                "key_type": "SOFTWARE_ECDSA_SHA256"
+              }
+            },
+            "federation": {
+              "aaa_server": {
+                "accounting_enabled": True,
+                "create_session_on_auth": True,
+                "idle_session_timeout_ms": 21600000
+              },
+              "eap_aka": {
+                "plmn_ids": [
+                  "123456"
+                ],
+                "timeout": {
+                  "challenge_ms": 20000,
+                  "error_notification_ms": 10000,
+                  "session_authenticated_ms": 5000,
+                  "session_ms": 43200000
+                }
+              },
+              "gx": {
+                "server": {
+                  "address": "foo.bar.com:5555",
+                  "dest_host": "magma-fedgw.magma.com",
+                  "dest_realm": "magma.com",
+                  "disable_dest_host": False,
+                  "host": "string",
+                  "local_address": ":56789",
+                  "product_name": "string",
+                  "protocol": "tcp",
+                  "realm": "string",
+                  "retransmits": 0,
+                  "retry_count": 0,
+                  "watchdog_interval": 0
+                }
+              },
+              "gy": {
+                "init_method": 2,
+                "server": {
+                  "address": "foo.bar.com:5555",
+                  "dest_host": "magma-fedgw.magma.com",
+                  "dest_realm": "magma.com",
+                  "disable_dest_host": False,
+                  "host": "string",
+                  "local_address": ":56789",
+                  "product_name": "string",
+                  "protocol": "tcp",
+                  "realm": "string",
+                  "retransmits": 0,
+                  "retry_count": 0,
+                  "watchdog_interval": 0
+                }
+              },
+              "health": {
+                "cloud_disable_period_secs": 10,
+                "cpu_utilization_threshold": 0.9,
+                "health_services": [
+                  "SESSION_PROXY",
+                  "SWX_PROXY"
+                ],
+                "local_disable_period_secs": 1,
+                "memory_available_threshold": 0.75,
+                "minimum_request_threshold": 1,
+                "request_failure_threshold": 0.5,
+                "update_failure_threshold": 3,
+                "update_interval_secs": 10
+              },
+              "hss": {
+                "default_sub_profile": {
+                  "max_dl_bit_rate": 200000000,
+                  "max_ul_bit_rate": 100000000
+                },
+                "lte_auth_amf": "gAA=",
+                "lte_auth_op": "EREREREREREREREREREREQ==",
+                "server": {
+                  "address": "foo.bar.com:5555",
+                  "dest_host": "magma-fedgw.magma.com",
+                  "dest_realm": "magma.com",
+                  "local_address": ":56789",
+                  "protocol": "tcp"
+                },
+                "stream_subscribers": False,
+                "sub_profiles": {
+                  "additionalProp1": {
+                    "max_dl_bit_rate": 200000000,
+                    "max_ul_bit_rate": 100000000
+                  },
+                  "additionalProp2": {
+                    "max_dl_bit_rate": 200000000,
+                    "max_ul_bit_rate": 100000000
+                  },
+                  "additionalProp3": {
+                    "max_dl_bit_rate": 200000000,
+                    "max_ul_bit_rate": 100000000
+                  }
+                }
+              },
+              "s6a": {
+                "server": {
+                  "address": "foo.bar.com:5555",
+                  "dest_host": "magma-fedgw.magma.com",
+                  "dest_realm": "magma.com",
+                  "disable_dest_host": False,
+                  "host": "string",
+                  "local_address": ":56789",
+                  "product_name": "string",
+                  "protocol": "tcp",
+                  "realm": "string",
+                  "retransmits": 0,
+                  "retry_count": 0,
+                  "watchdog_interval": 0
+                }
+              },
+              "served_network_ids": [
+                "string"
+              ],
+              "swx": {
+                "cache_TTL_seconds": 10800,
+                "derive_unregister_realm": False,
+                "register_on_auth": False,
+                "server": {
+                  "address": "foo.bar.com:5555",
+                  "dest_host": "magma-fedgw.magma.com",
+                  "dest_realm": "magma.com",
+                  "disable_dest_host": False,
+                  "host": "string",
+                  "local_address": ":56789",
+                  "product_name": "string",
+                  "protocol": "tcp",
+                  "realm": "string",
+                  "retransmits": 0,
+                  "retry_count": 0,
+                  "watchdog_interval": 0
+                },
+                "verify_authorization": False
+              }
+            },
+            "id": gw_id,
+            "magmad": {
+              "autoupgrade_enabled": True,
+              "autoupgrade_poll_interval": 300,
+              "checkin_interval": 60,
+              "checkin_timeout": 10,
+              "dynamic_services": [],
+              "feature_flags": {
+                "newfeature1": True,
+                "newfeature2": False
+              }
+            },
+            "name": gw_name,
+            "tier": "default"
+        }
+        return data
+
+
+def register_gateway(orc8r_api_url, gw_net, gw_net_type,
+                     gw_id, gw_uuid, gw_key, gw_name, certs):
+    msg = 'Register gateway {gw_name} with {gw_id} in network {gw_net_type} '\
+          '{gw_net} with hardware_id {gw_uuid} and key {gw_key}'.format(
+                  gw_name=gw_name,
+                  gw_id=gw_id,
+                  gw_net_type=gw_net_type,
+                  gw_net=gw_net,
+                  gw_uuid=gw_uuid,
+                  gw_key=gw_key)
+    LOG.info(msg)
+
+    register_gw_url = _get_register_gateway_url(gw_net_type, gw_net)
+    magma_gw_url = urljoin(orc8r_api_url, register_gw_url)
+
+    data = _get_register_gateway_data(gw_net_type,
+                                      gw_id, gw_uuid,
+                                      gw_key, gw_name)
 
     headers = {'content-type': 'application/json',
                'accept': 'application/json'}
@@ -142,16 +330,24 @@ def is_gateway_in_network(orc8r_api_url, gw_net, gw_id, certs):
     return gw_id in data
 
 
-def delete_gateway(orc8r_api_url, gw_net, gw_id, certs):
+def _get_delete_gateway_url(gw_net_type, gw_net, gw_id):
+    if gw_net_type == 'carrier_wifi_network':
+        url = 'magma/v1/cwf/{gw_net}/gateways/{gw_id}'.format(
+                gw_net=gw_net, gw_id=gw_id)
+    elif gw_net_type == 'feg':
+        url = 'magma/v1/feg/{gw_net}/gateways/{gw_id}'.format(
+            gw_net=gw_net, gw_id=gw_id)
+    return url
+
+
+def delete_gateway(orc8r_api_url, gw_net, gw_net_type, gw_id, certs):
     LOG.info('Delete gateway {gw_id} in network {gw_net}'.format(
         gw_id=gw_id,
         gw_net=gw_net))
 
-    magma_gw_url = urljoin(
-        orc8r_api_url,
-        'magma/v1/networks/{gw_net}/gateways/{gw_id}'.format(
-            gw_net=gw_net,
-            gw_id=gw_id))
+    delete_gw_url = _get_delete_gateway_url(gw_net_type, gw_net, gw_id)
+    magma_gw_url = urljoin(orc8r_api_url, delete_gw_url)
+
     headers = {'content-type': 'application/json',
                'accept': 'application/json'}
     resp = requests.delete(magma_gw_url,
