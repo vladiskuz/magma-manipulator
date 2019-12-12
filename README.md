@@ -7,11 +7,12 @@ git clone git@github.com:vladiskuz/magma-manipulator.git
 cd magma-manipulator
 virtualenv -p python3 .venv
 source .venv/bin/activate
-pip3 install -r requirements.txt
+python3 setup.py develop
 ```
 
 ## Configuration
 * change *config.yml* for your purposes
 * change *kconfig* regarding your k8s cluster
-* run the tool *./magma_manipulator/gws_reg.py*
+* run the tool magma-manipulator
 * delete some pod and wait until the pod will recreate and this tool will re-register them in NMS
+

@@ -18,7 +18,7 @@ import requests
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from urllib.parse import urljoin
 
-import exceptions
+from magma_manipulator import exceptions
 
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 LOG = logging.getLogger(__name__)

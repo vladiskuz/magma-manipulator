@@ -18,7 +18,7 @@ import os
 
 import paramiko
 
-import exceptions
+from magma_manipulator import exceptions
 
 
 LOG = logging.getLogger(__name__)
@@ -92,6 +92,10 @@ def get_gw_uuid_and_key(gw_ip, gw_username, gw_password):
 
 
 def save_gateway_config(gw_id, configs_dir, cfg):
+    if not os.path.exists(configs_dir):
+        os.makedirs(configs_dir)
+        LOG.info('Create directory for gateways configs {dir}'.format(
+            dir=configs_dir))
     cfg_name = str(gw_id) + '.json'
     cfg_path = os.path.join(configs_dir, cfg_name)
     with open(cfg_path, 'w', encoding='utf-8') as f:

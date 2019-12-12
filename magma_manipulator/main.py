@@ -15,6 +15,7 @@
 #    under the License.
 
 import logging
+import os
 import sys
 import threading
 import time
@@ -23,9 +24,9 @@ import yaml
 
 from kubernetes import client, config, watch
 
-import k8s_tools
-import magma_api
-import utils
+from magma_manipulator import k8s_tools
+from magma_manipulator import magma_api
+from magma_manipulator import utils
 
 
 LOG = logging.getLogger(__name__)
@@ -91,13 +92,13 @@ def get_gws_info(orc8r_api_url, configs_dir, certs):
     for net in networks:
         net_type = magma_api.get_network_type(orc8r_api_url, net, certs)
         gws = magma_api.get_gateways(orc8r_api_url, net, net_type, certs)
-        for gw_id in gws:
+        for gw_id, gw_desc in gws.items():
             gw_config = magma_api.get_gateway_config(
                 orc8r_api_url, net, net_type, gw_id, certs)
             config_path = utils.save_gateway_config(
-                gw_id, configs_dir, gw_config)
+                    gw_id, configs_dir, gw_config)
             info = {
-                gw_id: {
+                gw_desc['name']: {
                     'network': net,
                     'network_type': net_type,
                     'config_path': config_path
@@ -115,13 +116,14 @@ def parse_config(config):
 
 
 def main():
-    cfg = parse_config('config.yml')
+    dirname = os.path.dirname(__file__)
+    cfg = parse_config(os.path.join(dirname, 'config.yml'))
 
     orc8r_api_url = cfg['orc8r_api_url']
     certs = cfg['magma_certs_path']
-    gws_configs_dir = cfg['gateways']['configs_dir']
+    gws_configs_dir = os.path.join(dirname, cfg['gateways']['configs_dir'])
 
-    k8s_cfg = cfg['k8s']['kubeconfig_path']
+    k8s_cfg = os.path.join(dirname, cfg['k8s']['kubeconfig_path'])
     k8s_namespace = cfg['k8s']['namespace']
     gw_username = cfg['gateways']['username']
     gw_password = cfg['gateways']['password']
@@ -130,7 +132,7 @@ def main():
 
     LOG.info('Start watching for gateways {gws}'.format(
         gws=list(gws_info.keys())))
-    start_kubernetes_event_handler(cfg['k8s']['kubeconfig_path'],
+    start_kubernetes_event_handler(k8s_cfg,
                                    cfg['k8s']['namespace'],
                                    list(gws_info.keys()))
 
@@ -182,15 +184,10 @@ def main():
                                       gw_id, gw_uuid, gw_key, gw_id, certs)
 
                 config_path = gws_info[gw_id]['config_path']
-                gw_cfg = utils.load_gateway_config(gw_id,
-                                                   config_path)
+                gw_cfg = utils.load_gateway_config(gw_id, config_path)
                 magma_api.apply_gateway_config(orc8r_api_url,
                                                gw_net, gw_net_type,
                                                gw_id, gw_cfg, certs)
             time.sleep(1)
         except Exception as e:
             LOG.error(e)
-
-
-if __name__ == '__main__':
-    sys.exit(main())
