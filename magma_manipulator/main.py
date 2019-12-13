@@ -218,11 +218,11 @@ def main():
                                            gw_id, gw_uuid, gw_key,
                                            gw_name, certs)
 
-#                config_path = gws_info[gw_name]['config_path']
-#                gw_cfg = utils.load_gateway_config(gw_name, config_path)
-#                magma_api.apply_gateway_config(orc8r_api_url,
-#                                               gw_net, gw_net_type,
-#                                               gw_name, gw_cfg, certs)
+                config_path = gws_info[gw_name]['config_path']
+                gw_cfg = utils.load_gateway_config(gw_name, config_path)
+                magma_api.apply_gateway_config(orc8r_api_url,
+                                               gw_net, gw_net_type,
+                                               gw_id, gw_cfg, certs)
             time.sleep(1)
         except Exception as e:
             LOG.error(e)
