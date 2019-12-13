@@ -102,7 +102,6 @@ def start_pulling_gws_configs(orc8r_api_url, configs_dir, certs, interval=60):
     cfg_puller_thread.start()
 
 
-
 def put_event_after_timeout(event):
     LOG.debug('Wait {sec} seconds for event {event}'.format(
         sec=event['timeout'], event=event['pod_name']))
@@ -153,7 +152,7 @@ def main():
     k8s_cfg = os.path.join(dirname, cfg['k8s']['kubeconfig_path'])
     k8s_namespace = cfg['k8s']['namespace']
     gw_username = cfg['gateways']['username']
-    gw_password = cfg['gateways']['password']
+    rsa_private_key_path = cfg['gateways']['rsa_private_key_path']
 
     init_gws_info(orc8r_api_url, gws_configs_dir, certs)
 
@@ -191,18 +190,16 @@ def main():
                     event['timeout'] *= 2
                     put_event_after_timeout(event)
                     continue
-                time.sleep(10)
 
                 if not utils.is_cloud_init_done(gw_ip, gw_username,
-                                                gw_password):
+                                                rsa_private_key_path):
                     event['timeout'] *= 2
                     put_event_after_timeout(event)
                     continue
 
                 # get gw hardware id and challenge key
-                gw_uuid, gw_key = utils.get_gw_uuid_and_key(gw_ip,
-                                                            gw_username,
-                                                            gw_password)
+                gw_uuid, gw_key = utils.get_gw_uuid_and_key(
+                        gw_ip, gw_username, rsa_private_key_path)
 
                 gw_net = gws_info[gw_name]['network']
                 gw_net_type = gws_info[gw_name]['network_type']

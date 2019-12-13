@@ -8,5 +8,5 @@ magma_certs_path:
 
 gateways:
     configs_dir: ../gateways_configs
-    username: testuser
-    password: testuser
+    username: testuser1
+    rsa_private_key_path: /root/.ssh/id_rsa

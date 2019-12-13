@@ -12,6 +12,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from io import StringIO
 import json
 import logging
 import os
@@ -38,22 +39,25 @@ def is_gw_reachable(gw_ip):
     return response == 0
 
 
-def exec_ssh_command(server, username, password, command):
+def exec_ssh_command(server, username, rsa_private_key_path, command):
     client = None
     try:
+        with open(rsa_private_key_path, 'r') as f:
+            s = f.read()
+        pkey = paramiko.RSAKey(file_obj=StringIO(s))
+
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         LOG.debug('Connection to server {server} '
                   'to execute command "{cmd}"'.format(server=server,
                                                       cmd=command))
-        client.connect(server, username=username, password=password)
+        client.connect(server, username=username, pkey=pkey)
         ssh_stdin, ssh_stdout, ssh_stderr = client.exec_command(command)
 
         return ssh_stdout.read().decode('ascii')
-    except Exception:
-        msg = 'Something goes wrong during executing '\
-              'ssh command "{cmd}" on server {server}'.format(cmd=command,
-                                                              server=server)
+    except Exception as e:
+        msg = 'Execution ssh command "{cmd}" on server {server}'\
+              'returns {msg}'.format(cmd=command, server=server, msg=e)
         LOG.error(msg)
         raise exceptions.SshRemoteCommandException(msg)
     finally:
@@ -61,11 +65,11 @@ def exec_ssh_command(server, username, password, command):
             client.close()
 
 
-def is_cloud_init_done(gw_ip, gw_username, gw_password):
+def is_cloud_init_done(gw_ip, gw_username, rsa_private_key_path):
     LOG.info('Check cloud-init status on gatewat {gw_ip}'.format(gw_ip=gw_ip))
     result = exec_ssh_command(gw_ip,
                               gw_username,
-                              gw_password,
+                              rsa_private_key_path,
                               CLOUD_INIT_CHECK_CMD)
     LOG.info('Cloud-init status: {status} on gateway {gw_ip}'.format(
         status=result,
@@ -81,10 +85,10 @@ def is_cloud_init_done(gw_ip, gw_username, gw_password):
         raise exceptions.CloudInitException(msg)
 
 
-def get_gw_uuid_and_key(gw_ip, gw_username, gw_password):
+def get_gw_uuid_and_key(gw_ip, gw_username, rsa_private_key_path):
     ssh_output = exec_ssh_command(gw_ip,
                                   gw_username,
-                                  gw_password,
+                                  rsa_private_key_path,
                                   GET_GW_UUID_CMD)
     gw_uuid = ssh_output.split('\n')[2]
     gw_key = ssh_output.split('\n')[6]
