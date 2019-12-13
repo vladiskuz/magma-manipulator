@@ -34,10 +34,13 @@ logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
 
+GWS_CFG_PULL_INTERVAL = 30
+
 K8S_STARTED_REASON = ('Started',)
 K8S_ADDED_TYPE = ('ADDED',)
 
 events_queue = Queue()
+gws_info = {}
 INIT_QUEUE_TIMEOUT = 10
 EVENT_MAX_TIMEOUT = 900
 
@@ -75,6 +78,31 @@ def start_kubernetes_event_handler(kubeconfig_path, kube_namespace, gw_names):
     watch_thread.start()
 
 
+def pull_gws_Configs(orc8r_api_url, configs_dir, certs, interval):
+    while True:
+        for gw_name, gw_info in gws_info.items():
+            gw_config = magma_api.get_gateway_config(
+                    orc8r_api_url, gw_info['network'], gw_info['network_type'],
+                    gw_info['id'], certs)
+            config_path = utils.save_gateway_config(gw_info['id'], configs_dir,
+                                                    gw_config)
+            gw_info['config_path'] = config_path
+            LOG.info('Pulled config for {gw_name} {gw_id}'.format(
+                gw_name=gw_name, gw_id=gw_info['id']))
+        time.sleep(interval)
+
+
+def start_pulling_gws_configs(orc8r_api_url, configs_dir, certs, interval=60):
+    LOG.info('Start pulling gateways config at '
+             '{interval} second interval'.format(
+                 interval=interval))
+    cfg_puller_thread = threading.Thread(
+        target=pull_gws_Configs,
+        args=(orc8r_api_url, configs_dir, certs, interval))
+    cfg_puller_thread.start()
+
+
+
 def put_event_after_timeout(event):
     LOG.debug('Wait {sec} seconds for event {event}'.format(
         sec=event['timeout'], event=event['pod_name']))
@@ -86,8 +114,8 @@ def put_event_after_timeout(event):
     t.start()
 
 
-def get_gws_info(orc8r_api_url, configs_dir, certs):
-    gws_info = {}
+def init_gws_info(orc8r_api_url, configs_dir, certs):
+    global gws_info
     networks = magma_api.get_networks(orc8r_api_url, certs)
     for net in networks:
         net_type = magma_api.get_network_type(orc8r_api_url, net, certs)
@@ -106,8 +134,6 @@ def get_gws_info(orc8r_api_url, configs_dir, certs):
                 }
             }
             gws_info = {**gws_info, **info}
-
-    return gws_info
 
 
 def parse_config(config):
@@ -129,7 +155,10 @@ def main():
     gw_username = cfg['gateways']['username']
     gw_password = cfg['gateways']['password']
 
-    gws_info = get_gws_info(orc8r_api_url, gws_configs_dir, certs)
+    init_gws_info(orc8r_api_url, gws_configs_dir, certs)
+
+    start_pulling_gws_configs(orc8r_api_url, gws_configs_dir,
+                              certs, interval=GWS_CFG_PULL_INTERVAL)
 
     LOG.info('Start watching for gateways {gws}'.format(
         gws=list(gws_info.keys())))
