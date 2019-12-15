@@ -15,15 +15,13 @@
 #    under the License.
 
 import logging
-import os
-import sys
 import threading
 import time
 from queue import Queue
-import yaml
 
 from kubernetes import client, config, watch
 
+from magma_manipulator.config_parser import cfg
 from magma_manipulator import k8s_tools
 from magma_manipulator import magma_api
 from magma_manipulator import utils
@@ -71,6 +69,8 @@ def watch_for_gateways(kubeconfig_path, kube_namespace, gw_names):
 
 
 def start_kubernetes_event_handler(kubeconfig_path, kube_namespace, gw_names):
+    LOG.info('Start watching for gateways {gws}'.format(
+        gws=(gw_names)))
     LOG.info('Start watching for k8s events')
     watch_thread = threading.Thread(
         target=watch_for_gateways,
@@ -135,35 +135,18 @@ def init_gws_info(orc8r_api_url, configs_dir, certs):
             gws_info = {**gws_info, **info}
 
 
-def parse_config(config):
-    with open(config, 'r') as ymlfile:
-        cfg = yaml.load(ymlfile, Loader=yaml.FullLoader)
-    return cfg
-
-
 def main():
-    dirname = os.path.dirname(__file__)
-    cfg = parse_config(os.path.join(dirname, 'config.yml'))
+    init_gws_info(cfg.k8s.orc8r_api_url,
+                  cfg.gateways.configs_dir,
+                  cfg.magma_certs_path)
 
-    orc8r_api_url = cfg['orc8r_api_url']
-    certs = cfg['magma_certs_path']
-    gws_configs_dir = os.path.join(dirname, cfg['gateways']['configs_dir'])
+    start_pulling_gws_configs(cfg.k8s.orc8r_api_url,
+                              cfg.gateways.configs_dir,
+                              cfg.magma_certs_path,
+                              interval=GWS_CFG_PULL_INTERVAL)
 
-    k8s_cfg = os.path.join(dirname, cfg['k8s']['kubeconfig_path'])
-    k8s_namespace = cfg['k8s']['namespace']
-    gw_username = cfg['gateways']['username']
-    rsa_private_key_path = cfg['gateways']['rsa_private_key_path']
-
-    init_gws_info(orc8r_api_url, gws_configs_dir, certs)
-
-    start_pulling_gws_configs(orc8r_api_url, gws_configs_dir,
-                              certs, interval=GWS_CFG_PULL_INTERVAL)
-
-    LOG.info('Start watching for gateways {gws}'.format(
-        gws=list(gws_info.keys())))
-    start_kubernetes_event_handler(k8s_cfg,
-                                   cfg['k8s']['namespace'],
-                                   list(gws_info.keys()))
+    start_kubernetes_event_handler(
+        cfg.k8s.kubeconfig_path, cfg.k8s.namespace, list(gws_info.keys()))
 
     while True:
         try:
@@ -174,7 +157,8 @@ def main():
                 LOG.info('Handle event for {gw_pod_name}'.format(
                     gw_pod_name=gw_pod_name))
 
-                if not k8s_tools.is_pod_ready(k8s_cfg, k8s_namespace,
+                if not k8s_tools.is_pod_ready(cfg.k8s.kubeconfig_path,
+                                              cfg.k8s.namespace,
                                               gw_pod_name):
                     event['timeout'] *= 2
                     put_event_after_timeout(event)
@@ -182,44 +166,47 @@ def main():
 
                 gw_name = gw_pod_name.split('-')[0]
                 gw_id = gws_info[gw_name]['id']
-                gw_ip = k8s_tools.get_gw_ip(k8s_cfg,
-                                            k8s_namespace,
-                                            gw_pod_name)
+                gw_ip = k8s_tools.get_gw_ip(
+                    cfg.k8s.kubeconfig_path, cfg.k8s.namespace, gw_pod_name)
 
                 if not utils.is_gw_reachable(gw_ip):
                     event['timeout'] *= 2
                     put_event_after_timeout(event)
                     continue
 
-                if not utils.is_cloud_init_done(gw_ip, gw_username,
-                                                rsa_private_key_path):
+                if not utils.is_cloud_init_done(
+                        gw_ip, cfg.gateways.username,
+                        cfg.gateways.rsa_private_key_path):
                     event['timeout'] *= 2
                     put_event_after_timeout(event)
                     continue
 
                 # get gw hardware id and challenge key
                 gw_uuid, gw_key = utils.get_gw_uuid_and_key(
-                        gw_ip, gw_username, rsa_private_key_path)
+                    gw_ip, cfg.gateway.username,
+                    cfg.gateways.rsa_private_key_path)
 
                 gw_net = gws_info[gw_name]['network']
                 gw_net_type = gws_info[gw_name]['network_type']
-                if magma_api.is_gateway_in_network(orc8r_api_url,
+                if magma_api.is_gateway_in_network(cfg.k8s.orc8r_api_url,
                                                    gw_net,
-                                                   gw_id, certs):
-                    magma_api.delete_gateway(orc8r_api_url,
+                                                   gw_id,
+                                                   cfg.magma_certs_path):
+                    magma_api.delete_gateway(cfg.k8s.orc8r_api_url,
                                              gw_net, gw_net_type,
-                                             gw_id, certs)
+                                             gw_id, cfg.magma_certs_path)
 
-                magma_api.register_gateway(orc8r_api_url,
+                magma_api.register_gateway(cfg.k8s.orc8r_api_url,
                                            gw_net, gw_net_type,
                                            gw_id, gw_uuid, gw_key,
-                                           gw_name, certs)
+                                           gw_name, cfg.magma_certs_path)
 
                 config_path = gws_info[gw_name]['config_path']
                 gw_cfg = utils.load_gateway_config(gw_name, config_path)
-                magma_api.apply_gateway_config(orc8r_api_url,
+                magma_api.apply_gateway_config(cfg.k8s.orc8r_api_url,
                                                gw_net, gw_net_type,
-                                               gw_id, gw_cfg, certs)
+                                               gw_id, gw_cfg,
+                                               cfg.magma_certs_path)
             time.sleep(1)
         except Exception as e:
             LOG.error(e)
