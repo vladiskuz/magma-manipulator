@@ -34,6 +34,7 @@ logging.basicConfig(
     format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
 
 GWS_CFG_PULL_INTERVAL = 30
+RETRY_ON_FAIL = 3
 
 K8S_STARTED_REASON = ('Started',)
 K8S_ADDED_TYPE = ('ADDED',)
@@ -63,7 +64,8 @@ def watch_for_gateways(kubeconfig_path, kube_namespace, gw_names):
                              msg=event['object'].message))
                 event = {
                     'pod_name': event['object'].involved_object.name,
-                    'timeout': INIT_QUEUE_TIMEOUT
+                    'timeout': INIT_QUEUE_TIMEOUT,
+                    'retry_on_fail': RETRY_ON_FAIL
                 }
                 events_queue.put(event)
 
@@ -170,3 +172,11 @@ def main():
             time.sleep(1)
         except Exception as e:
             LOG.error(e)
+            if event['retry_on_fail'] > 0:
+                event['retry_on_fail'] -= 1
+                put_event_after_timeout(event)
+                LOG.warning('Try to register gateway {gw_name} {gw_id} one '
+                            'more time. Remainig attempts {attempts}'.format(
+                                gw_name=gw.name,
+                                gw_id=gw.id,
+                                attempts=event['retry_on_fail']))
