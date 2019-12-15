@@ -21,7 +21,8 @@ from queue import Queue
 
 from kubernetes import client, config, watch
 
-from magma_manipulator.config_parser import cfg
+from magma_manipulator.config_parser import cfg as CONF
+from magma_manipulator import gateways
 from magma_manipulator import k8s_tools
 from magma_manipulator import magma_api
 from magma_manipulator import utils
@@ -38,7 +39,6 @@ K8S_STARTED_REASON = ('Started',)
 K8S_ADDED_TYPE = ('ADDED',)
 
 events_queue = Queue()
-gws_info = {}
 INIT_QUEUE_TIMEOUT = 10
 EVENT_MAX_TIMEOUT = 900
 
@@ -68,37 +68,37 @@ def watch_for_gateways(kubeconfig_path, kube_namespace, gw_names):
                 events_queue.put(event)
 
 
-def start_kubernetes_event_handler(kubeconfig_path, kube_namespace, gw_names):
-    LOG.info('Start watching for gateways {gws}'.format(
-        gws=(gw_names)))
-    LOG.info('Start watching for k8s events')
+def pull_gws_configs(gateways):
+    while True:
+        for gw_name, gw in gateways.items():
+            gw_config = magma_api.get_gateway_config(
+                CONF.orc8r_api_url,
+                gw.network, gw.network_type,
+                gw.id, CONF.magma_certs_path)
+
+            config_path = utils.save_gateway_config(
+                gw.id, CONF.gateways.configs_dir, gw_config)
+            gw.config_path = config_path
+            LOG.info('Pulled config for {gw_name} {gw_id}'.format(
+                gw_name=gw.name, gw_id=gw.id))
+        time.sleep(GWS_CFG_PULL_INTERVAL)
+
+
+def start_periodic_tasks(gateways):
+    LOG.info('Start watching for k8s events from gateways {gws}'.format(
+        gws=(gateways.keys())))
     watch_thread = threading.Thread(
         target=watch_for_gateways,
-        args=(kubeconfig_path, kube_namespace, gw_names))
+        args=(CONF.k8s.kubeconfig_path,
+              CONF.k8s.namespace,
+              gateways.keys()))
     watch_thread.start()
 
-
-def pull_gws_Configs(orc8r_api_url, configs_dir, certs, interval):
-    while True:
-        for gw_name, gw_info in gws_info.items():
-            gw_config = magma_api.get_gateway_config(
-                    orc8r_api_url, gw_info['network'], gw_info['network_type'],
-                    gw_info['id'], certs)
-            config_path = utils.save_gateway_config(gw_info['id'], configs_dir,
-                                                    gw_config)
-            gw_info['config_path'] = config_path
-            LOG.info('Pulled config for {gw_name} {gw_id}'.format(
-                gw_name=gw_name, gw_id=gw_info['id']))
-        time.sleep(interval)
-
-
-def start_pulling_gws_configs(orc8r_api_url, configs_dir, certs, interval=60):
-    LOG.info('Start pulling gateways config at '
-             '{interval} second interval'.format(
-                 interval=interval))
+    LOG.info('Pulling gateways config at {interval} second interval'.format(
+        interval=GWS_CFG_PULL_INTERVAL))
     cfg_puller_thread = threading.Thread(
-        target=pull_gws_Configs,
-        args=(orc8r_api_url, configs_dir, certs, interval))
+        target=pull_gws_configs,
+        args=(gateways,))
     cfg_puller_thread.start()
 
 
@@ -113,100 +113,60 @@ def put_event_after_timeout(event):
     t.start()
 
 
-def init_gws_info(orc8r_api_url, configs_dir, certs):
-    global gws_info
-    networks = magma_api.get_networks(orc8r_api_url, certs)
-    for net in networks:
-        net_type = magma_api.get_network_type(orc8r_api_url, net, certs)
-        gws = magma_api.get_gateways(orc8r_api_url, net, net_type, certs)
-        for gw_id, gw_desc in gws.items():
-            gw_config = magma_api.get_gateway_config(
-                orc8r_api_url, net, net_type, gw_id, certs)
-            config_path = utils.save_gateway_config(
-                    gw_id, configs_dir, gw_config)
-            info = {
-                gw_desc['name']: {
-                    'id': gw_id,
-                    'network': net,
-                    'network_type': net_type,
-                    'config_path': config_path
-                }
-            }
-            gws_info = {**gws_info, **info}
-
-
 def main():
-    init_gws_info(cfg.k8s.orc8r_api_url,
-                  cfg.gateways.configs_dir,
-                  cfg.magma_certs_path)
-
-    start_pulling_gws_configs(cfg.k8s.orc8r_api_url,
-                              cfg.gateways.configs_dir,
-                              cfg.magma_certs_path,
-                              interval=GWS_CFG_PULL_INTERVAL)
-
-    start_kubernetes_event_handler(
-        cfg.k8s.kubeconfig_path, cfg.k8s.namespace, list(gws_info.keys()))
+    gws_manager = gateways.GatewaysManager()
+    start_periodic_tasks(gws_manager.get_gateways())
 
     while True:
         try:
             if not events_queue.empty():
                 event = events_queue.get()
                 gw_pod_name = event['pod_name']
+                gw = gws_manager.get_gateway(gw_pod_name)
 
                 LOG.info('Handle event for {gw_pod_name}'.format(
                     gw_pod_name=gw_pod_name))
 
-                if not k8s_tools.is_pod_ready(cfg.k8s.kubeconfig_path,
-                                              cfg.k8s.namespace,
+                if not k8s_tools.is_pod_ready(CONF.k8s.kubeconfig_path,
+                                              CONF.k8s.namespace,
                                               gw_pod_name):
                     event['timeout'] *= 2
                     put_event_after_timeout(event)
                     continue
 
-                gw_name = gw_pod_name.split('-')[0]
-                gw_id = gws_info[gw_name]['id']
-                gw_ip = k8s_tools.get_gw_ip(
-                    cfg.k8s.kubeconfig_path, cfg.k8s.namespace, gw_pod_name)
-
-                if not utils.is_gw_reachable(gw_ip):
+                if not utils.is_gw_reachable(gw.get_ip(gw_pod_name)):
                     event['timeout'] *= 2
                     put_event_after_timeout(event)
                     continue
 
                 if not utils.is_cloud_init_done(
-                        gw_ip, cfg.gateways.username,
-                        cfg.gateways.rsa_private_key_path):
+                        gw.get_ip(gw_pod_name),
+                        CONF.gateways.username,
+                        CONF.gateways.rsa_private_key_path):
                     event['timeout'] *= 2
                     put_event_after_timeout(event)
                     continue
 
+                if magma_api.is_gateway_in_network(CONF.orc8r_api_url,
+                                                   gw.network,
+                                                   gw.id,
+                                                   CONF.magma_certs_path):
+                    magma_api.delete_gateway(CONF.orc8r_api_url,
+                                             gw.network, gw.network_type,
+                                             gw.id, CONF.magma_certs_path)
+
                 # get gw hardware id and challenge key
-                gw_uuid, gw_key = utils.get_gw_uuid_and_key(
-                    gw_ip, cfg.gateway.username,
-                    cfg.gateways.rsa_private_key_path)
+                gw_uuid, gw_key = gw.get_uuid_and_key()
 
-                gw_net = gws_info[gw_name]['network']
-                gw_net_type = gws_info[gw_name]['network_type']
-                if magma_api.is_gateway_in_network(cfg.k8s.orc8r_api_url,
-                                                   gw_net,
-                                                   gw_id,
-                                                   cfg.magma_certs_path):
-                    magma_api.delete_gateway(cfg.k8s.orc8r_api_url,
-                                             gw_net, gw_net_type,
-                                             gw_id, cfg.magma_certs_path)
+                magma_api.register_gateway(CONF.orc8r_api_url,
+                                           gw.network, gw.network_type,
+                                           gw.id, gw_uuid, gw_key,
+                                           gw.name, CONF.magma_certs_path)
 
-                magma_api.register_gateway(cfg.k8s.orc8r_api_url,
-                                           gw_net, gw_net_type,
-                                           gw_id, gw_uuid, gw_key,
-                                           gw_name, cfg.magma_certs_path)
-
-                config_path = gws_info[gw_name]['config_path']
-                gw_cfg = utils.load_gateway_config(gw_name, config_path)
-                magma_api.apply_gateway_config(cfg.k8s.orc8r_api_url,
-                                               gw_net, gw_net_type,
-                                               gw_id, gw_cfg,
-                                               cfg.magma_certs_path)
+                magma_api.apply_gateway_config(CONF.orc8r_api_url,
+                                               gw.network, gw.network_type,
+                                               gw.id, gw.get_config(),
+                                               CONF.magma_certs_path)
             time.sleep(1)
         except Exception as e:
             LOG.error(e)
