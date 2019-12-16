@@ -1,5 +1,8 @@
 # Magma manipulator
-This is a magma gateway registration tool. Often we are faced with a situation where some magma pods with gateways are recreated, and we need to re-register them in magma by hand. This is normal when we are dealing with couple gateways, but when we have tens or hundreds of gateways, this operation takes a lot of time. This tool is trying to solve this problem.
+This is standalone tool that helps automatically register [Magma](https://github.com/facebookincubator/magma) gateways.
+It works in Kubernetes cluster with virtlet only.
+For example if some pod with gateway was recreated by Kubernetes this tool
+will re-register the new gateway automatically in [Magma](https://github.com/facebookincubator/magma) orc8r.
 
 ## Installation
 ```
@@ -14,5 +17,5 @@ python3 setup.py develop
 * change *config.yml* for your purposes
 * change *kconfig* regarding your k8s cluster
 * run the tool magma-manipulator
-* delete some pod and wait until the pod will recreate and this tool will re-register them in NMS
+* delete some pod and wait until the pod will recreate and this tool will re-register them in Magma orc8r
 
