@@ -163,12 +163,8 @@ def main():
                 magma_api.register_gateway(CONF.orc8r_api_url,
                                            gw.network, gw.network_type,
                                            gw.id, gw_uuid, gw_key,
-                                           gw.name, CONF.magma_certs_path)
-
-                magma_api.apply_gateway_config(CONF.orc8r_api_url,
-                                               gw.network, gw.network_type,
-                                               gw.id, gw.get_config(),
-                                               CONF.magma_certs_path)
+                                           gw.name, gw.gwt_config(),
+                                           CONF.magma_certs_path)
             time.sleep(1)
         except Exception as e:
             LOG.error(e)

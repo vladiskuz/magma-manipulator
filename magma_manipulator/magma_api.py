@@ -275,8 +275,31 @@ def _get_register_gateway_data(gw_net_type, gw_id, gw_uuid, gw_key, gw_name):
         return data
 
 
+def _apply_gateway_config(orc8r_api_url, net_id, net_type, gw_id, cfg, certs):
+    LOG.info('Apply config to gateway {gw_id} in {net_type} {net_id}'.format(
+        gw_id=gw_id, net_type=net_type, net_id=net_id))
+    gw_cfg_url = _get_gw_config_url(net_id, net_type, gw_id)
+    magma_gw_cfg_url = urljoin(orc8r_api_url, gw_cfg_url)
+
+    headers = {'content-type': 'application/json',
+               'accept': 'application/json'}
+    resp = requests.put(magma_gw_cfg_url,
+                        data=json.dumps(cfg),
+                        headers=headers,
+                        verify=False,
+                        cert=certs)
+    msg = 'Received response {text} with status code {status_code} after '\
+          'applying the configuration to gateway {gw_id}'.format(
+              text=resp.text,
+              status_code=resp.status_code,
+              gw_id=gw_id)
+    LOG.info(msg)
+    if resp.status_code not in [200, 201, 204]:
+        raise exceptions.MagmaRequestException(msg)
+
+
 def register_gateway(orc8r_api_url, gw_net, gw_net_type,
-                     gw_id, gw_uuid, gw_key, gw_name, certs):
+                     gw_id, gw_uuid, gw_key, gw_name, gw_conf, certs):
     msg = 'Register gateway {gw_name} with {gw_id} in network {gw_net_type} '\
           '{gw_net} with hardware_id {gw_uuid} and key {gw_key}'.format(
                   gw_name=gw_name,
@@ -307,8 +330,12 @@ def register_gateway(orc8r_api_url, gw_net, gw_net_type,
                   status_code=resp.status_code,
                   gw_name=gw_name)
     LOG.info(msg)
+
     if resp.status_code not in [200, 201, 204]:
         raise exceptions.MagmaRequestException(msg)
+
+    _apply_gateway_config(orc8r_api_url, gw_net, gw_net_type,
+                          gw_id, gw_conf, certs)
 
 
 def is_gateway_in_network(orc8r_api_url, gw_net, gw_id, certs):
@@ -466,26 +493,3 @@ def get_gateway_config(orc8r_api_url, net_id, net_type, gw_id, certs):
     LOG.debug('Config for cateway {gw_id} {cfg}'.format(
         gw_id=gw_id, cfg=data))
     return data
-
-
-def apply_gateway_config(orc8r_api_url, net_id, net_type, gw_id, cfg, certs):
-    LOG.info('Apply config to gateway {gw_id} in {net_type} {net_id}'.format(
-        gw_id=gw_id, net_type=net_type, net_id=net_id))
-    gw_cfg_url = _get_gw_config_url(net_id, net_type, gw_id)
-    magma_gw_cfg_url = urljoin(orc8r_api_url, gw_cfg_url)
-
-    headers = {'content-type': 'application/json',
-               'accept': 'application/json'}
-    resp = requests.put(magma_gw_cfg_url,
-                        data=json.dumps(cfg),
-                        headers=headers,
-                        verify=False,
-                        cert=certs)
-    msg = 'Received response {text} with status code {status_code} after '\
-          'applying the configuration to gateway {gw_id}'.format(
-              text=resp.text,
-              status_code=resp.status_code,
-              gw_id=gw_id)
-    LOG.info(msg)
-    if resp.status_code not in [200, 201, 204]:
-        raise exceptions.MagmaRequestException(msg)
